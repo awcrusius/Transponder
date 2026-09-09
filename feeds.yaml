@@ -1,0 +1,78 @@
+# Transponder feed configuration.
+#
+# Each entry is one GTFS feed. `feed_id` must be unique: it scopes every row
+# written to the database, because GTFS IDs (trip_id, stop_id, ...) are only
+# unique within a single feed.
+#
+# realtime.* entries accept either a bare URL or a mapping with `url` and an
+# optional `poll_interval_seconds` override. Omit any endpoint the agency
+# does not publish.
+#
+# auth.type: none | header | query_param
+#   key: header name or query parameter name
+#   env: environment variable holding the secret (never put secrets here).
+#        May be a list of variables, and each variable may hold several keys
+#        separated by commas. Keys are used in order; one that hits its quota
+#        (HTTP 429) or fails auth (401/403) is benched and the next takes over.
+#   daily_request_limit: optional per-key limit, used to word the quota alert
+#        with a concrete suggested poll interval.
+#   exhausted_cooldown_seconds: how long a quota-blocked key sits out (default 3600).
+#
+# stale_after_seconds (per feed, optional): override alerting.stale_after_seconds.
+
+feeds:
+  - feed_id: translink
+    agency: TransLink (Metro Vancouver)
+    static_url: https://gtfs-static.translink.ca/gtfs/google_transit.zip
+    realtime:
+      vehicle_positions: https://gtfsrt.api.translink.ca/v3/gtfsposition
+      trip_updates: https://gtfsrt.api.translink.ca/v3/gtfsrealtime
+      service_alerts:
+        url: https://gtfsrt.api.translink.ca/v3/gtfsalerts
+        poll_interval_seconds: 120
+    auth:
+      type: query_param
+      key: apikey
+      env: TRANSLINK_API_KEYS        # e.g. TRANSLINK_API_KEYS=key1,key2 in .env
+      daily_request_limit: 1000
+    rt_poll_interval_seconds: 30
+    static_check_interval_hours: 24
+
+  - feed_id: bctransit_victoria
+    agency: BC Transit (Victoria Regional Transit System)
+    static_url: https://bct.tmix.se/Tmix.Cap.TdExport.WebApi/gtfs/?operatorIds=48
+    realtime:
+      vehicle_positions: https://bct.tmix.se/gtfs-realtime/vehicleupdates.pb?operatorIds=48
+      trip_updates: https://bct.tmix.se/gtfs-realtime/tripupdates.pb?operatorIds=48
+      service_alerts: https://bct.tmix.se/gtfs-realtime/alerts.pb?operatorIds=48
+    auth:
+      type: none
+    rt_poll_interval_seconds: 30
+    static_check_interval_hours: 24
+
+  # Header-auth example (disabled: no such agency).
+  # - feed_id: example_header_auth
+  #   agency: Example Transit
+  #   static_url: https://example.org/gtfs.zip
+  #   realtime:
+  #     vehicle_positions: https://example.org/rt/vehicles.pb
+  #   auth:
+  #     type: header
+  #     key: X-API-Key
+  #     env: EXAMPLE_API_KEY
+  #   rt_poll_interval_seconds: 15
+  #   static_check_interval_hours: 12
+
+# Alerting (optional). Secrets come from the named environment variables.
+# Without this block problems are still tracked and logged, just not pushed.
+alerting:
+  pushover:
+    token_env: PUSHOVER_TOKEN
+    user_env: PUSHOVER_USER
+    # device: my-phone
+  # webhook:
+  #   url_env: ALERT_WEBHOOK_URL     # receives {"title", "message", "priority"} as JSON
+  stale_after_seconds: 600           # HTTP 200 but no new data for this long -> "feed stale"
+  repeat_after_seconds: 3600         # re-notify an ongoing problem at most hourly
+  min_consecutive_failures: 3        # network/HTTP/decode blips before alerting
+  notify_on_start: false

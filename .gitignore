@@ -1,0 +1,57 @@
+# --- Python bytecode & caches ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+
+# --- Packaging & build output ---
+build/
+dist/
+*.egg-info/
+.eggs/
+wheels/
+
+# --- Testing & coverage ---
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+
+# --- Type checkers & linters ---
+.mypy_cache/
+.pyright/
+.ruff_cache/
+.dmypy.json
+dmypy.json
+
+# --- Secrets & local environment ---
+# .env.example is committed; the real .env never is.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- Local data & GTFS artifacts ---
+# Static feeds are downloaded to a temp dir (TRANSPONDER_TMP_DIR); ignore any
+# zips or extracted feeds that land in the working tree.
+*.zip
+tmp/
+data/
+*.log
+
+# --- Editors & tooling ---
+.vscode/
+.idea/
+*.swp
+.claude/settings.local.json
+
+# --- macOS ---
+.DS_Store
