@@ -26,10 +26,10 @@ feeds:
     agency: TransLink (Metro Vancouver)
     static_url: https://gtfs-static.translink.ca/gtfs/google_transit.zip
     realtime:
-      vehicle_positions: https://gtfsrt.api.translink.ca/v3/gtfsposition
-      trip_updates: https://gtfsrt.api.translink.ca/v3/gtfsrealtime
+      vehicle_positions: https://gtfsapi.translink.ca/v3/gtfsposition
+      trip_updates: https://gtfsapi.translink.ca/v3/gtfsrealtime
       service_alerts:
-        url: https://gtfsrt.api.translink.ca/v3/gtfsalerts
+        url: https://gtfsapi.translink.ca/v3/gtfsalerts
         poll_interval_seconds: 120
     auth:
       type: query_param
@@ -50,6 +50,12 @@ feeds:
       type: none
     rt_poll_interval_seconds: 30
     static_check_interval_hours: 24
+
+  - feed_id: bcferries
+    agency: BC Ferries (BC Regional Ferry System)
+    static_url: https://data.trilliumtransit.com/gtfs/bcferries-bc-ca/bcferries-bc-ca.zip
+    static_check_interval_hours: 24
+
 
   # Header-auth example (disabled: no such agency).
   # - feed_id: example_header_auth
