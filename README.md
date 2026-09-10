@@ -12,8 +12,8 @@ Point it at any number of GTFS feeds in `feeds.yaml` and it will:
   GTFS identifiers are only unique within one feed.
 
 It also watches itself: every failure mode is classified, de-duplicated, and
-pushed to Pushover or a webhook, and each feed can carry several API keys that
-rotate automatically when one runs out of quota.
+pushed to Pushover or a webhook, and each feed can spread its requests round-robin over several API keys,
+benching any that run out of quota.
 
 There is no web UI or API layer yet. The deliverable is the ingestion service, the
 schema, and a Docker Compose setup for local development.
@@ -175,14 +175,15 @@ auth:
   env: [TRANSLINK_API_KEYS, TRANSLINK_SPARE_KEY]   # TRANSLINK_API_KEYS=k1,k2
 ```
 
-All endpoints of a feed share one key ring. Keys are used in order: the first
-usable key serves every request until the agency answers 429 (or 403 with
-rate-limit wording), at which point it is benched for `Retry-After` if given,
-else `exhausted_cooldown_seconds` (default one hour), and the next key takes
-over in the same request. A 401, or a 403 without rate-limit wording, benches
-the key for six hours as invalid. Every benching sends a notice naming the key.
-Using keys in order rather than round-robin means you see keys run out one by
-one and get warned before the last one goes.
+All endpoints of a feed share one key ring, and every request takes the next
+key round-robin, so the load is spread evenly and each key's daily quota lasts
+as long as possible. When the agency answers 429 (or 403 with rate-limit
+wording) the key is benched for `Retry-After` if given, else
+`exhausted_cooldown_seconds` (default one hour), and the request is retried at
+once with the next usable key. A 401, or a 403 without rate-limit wording,
+benches the key for six hours as invalid. Every benching sends a notice naming
+the key and how many remain, so a feed with several keys warns you before the
+last one goes.
 
 When no key is usable the endpoint raises `all keys exhausted` (or
 `auth failed` if none were quota-related), backs off until the earliest key

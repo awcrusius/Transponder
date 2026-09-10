@@ -1,9 +1,9 @@
 """API key pools with rotation on quota and authentication failures.
 
 A feed has one KeyRing shared by all of its endpoints (quotas are per key, not
-per endpoint). Keys are used in configured order: the first usable key handles
-every request until it is blocked, then the next one takes over, so exhaustion
-shows up progressively instead of all at once.
+per endpoint). Keys are used round-robin: every request takes the next usable
+key, so the load is spread evenly and each key's quota lasts the whole day.
+A key that is benched (quota or auth failure) is skipped until its cooldown ends.
 """
 
 from __future__ import annotations
@@ -58,18 +58,23 @@ class KeyRing:
         self.advice = advice
         self._exhausted_cooldown = exhausted_cooldown
         self._invalid_cooldown = invalid_cooldown
+        self._next = 0
 
     @property
     def size(self) -> int:
         return len(self.keys)
 
     def acquire(self) -> ApiKey | None:
+        """Next usable key in round-robin order, or None if every key is benched."""
         now = time.monotonic()
-        for key in self.keys:
+        for offset in range(self.size):
+            idx = (self._next + offset) % self.size
+            key = self.keys[idx]
             if key.usable(now):
                 if key.blocked_for is not None:
                     log.info("%s: API key %s back in service", self.feed_id, key.label)
                     key.blocked_for = None
+                self._next = (idx + 1) % self.size
                 return key
         return None
 

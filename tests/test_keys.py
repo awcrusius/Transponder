@@ -14,6 +14,16 @@ def make_client(handler) -> httpx.AsyncClient:
     return httpx.AsyncClient(transport=httpx.MockTransport(handler))
 
 
+def test_round_robin_skips_benched_keys():
+    r = ring(3)
+    k1, k2, k3 = r.keys
+    assert [r.acquire() for _ in range(4)] == [k1, k2, k3, k1]
+    r.block(k3, ErrorKind.QUOTA_EXHAUSTED)
+    assert [r.acquire() for _ in range(4)] == [k2, k1, k2, k1]
+    k3.blocked_until = 0
+    assert [r.acquire() for _ in range(3)] == [k2, k3, k1]
+
+
 def test_block_and_recover(monkeypatch):
     r = ring(2, exhausted_cooldown=100)
     k1, k2 = r.keys

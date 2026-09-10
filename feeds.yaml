@@ -12,8 +12,9 @@
 #   key: header name or query parameter name
 #   env: environment variable holding the secret (never put secrets here).
 #        May be a list of variables, and each variable may hold several keys
-#        separated by commas. Keys are used in order; one that hits its quota
-#        (HTTP 429) or fails auth (401/403) is benched and the next takes over.
+#        separated by commas. Requests rotate through the keys round-robin; one
+#        that hits its quota (HTTP 429) or fails auth (401/403) is benched and
+#        skipped until its cooldown ends.
 #   daily_request_limit: optional per-key limit, used to word the quota alert
 #        with a concrete suggested poll interval.
 #   exhausted_cooldown_seconds: how long a quota-blocked key sits out (default 3600).
@@ -33,7 +34,7 @@ feeds:
     auth:
       type: query_param
       key: apikey
-      env: TRANSLINK_API_KEYS        # e.g. TRANSLINK_API_KEYS=key1,key2 in .env
+      env: TRANSLINK_API_KEYS
       daily_request_limit: 1000
     rt_poll_interval_seconds: 30
     static_check_interval_hours: 24
