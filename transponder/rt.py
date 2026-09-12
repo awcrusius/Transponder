@@ -17,6 +17,7 @@ from google.transit import gtfs_realtime_pb2 as pb
 
 from transponder import tables
 from transponder.config import FeedConfig, ResolvedAuth
+from transponder.dedupe import Deduper
 from transponder.health import ErrorKind, FetchError, Health, classify_exception
 from transponder.keys import KeyRing, key_block_notifier, request_with_rotation
 
@@ -230,6 +231,7 @@ class Poller:
         writer: "Writer",
         health: Health | None = None,
         stale_after: float = 600.0,
+        dedupe_window: float = 3600.0,
     ) -> None:
         self.feed_id = feed.feed_id
         self.kind = kind
@@ -244,6 +246,15 @@ class Poller:
         self._on_block = key_block_notifier(health, keyring, kind)
         self._last_signature: Any = None
         self._last_change: float | None = None
+        self._deduper = Deduper(dedupe_window)
+        self._rows_out = 0
+
+    def _decode_and_dedupe(self, payload: bytes, fetched_at: datetime) -> Decoded:
+        """Runs in a worker thread; one call at a time per poller, so the deduper needs no lock."""
+        decoded = decode(self.feed_id, self.kind, payload, fetched_at)
+        now = fetched_at.timestamp()
+        decoded.batches = [self._deduper.filter(b, now) for b in decoded.batches]
+        return decoded
 
     async def _send(self, auth: ResolvedAuth) -> httpx.Response:
         return await self._client.get(self.url, headers=auth.headers, params=auth.params, timeout=RT_TIMEOUT)
@@ -264,7 +275,7 @@ class Poller:
                 snippet = payload[:200].decode("utf-8", errors="replace").strip()
                 raise FetchError(ErrorKind.HTTP_ERROR, f"HTTP {status} from {self.url}: {snippet or resp.reason_phrase}", status=status)
             try:
-                decoded = await asyncio.to_thread(decode, self.feed_id, self.kind, payload, fetched_at)
+                decoded = await asyncio.to_thread(self._decode_and_dedupe, payload, fetched_at)
             except DecodeError as e:
                 ctype = resp.headers.get("content-type", "?")
                 raise FetchError(
@@ -281,12 +292,19 @@ class Poller:
             raise
 
         for batch in decoded.batches:
-            await self._writer.submit(batch)
+            if batch.rows:
+                await self._writer.submit(batch)
         await self._log_fetch(fetched_at, started, status, decoded.entity_count, size, key_label, None, None)
         if self._health:
             self._health.report_ok(self.keys_scope)
             self._check_staleness(decoded, payload, fetched_at)
-        log.debug("%s: %d entities in %.0f ms via %s", self.scope, decoded.entity_count, (time.perf_counter() - started) * 1000, key_label)
+        kept = sum(len(b.rows) for b in decoded.batches)
+        log.debug(
+            "%s: %d entities, %d rows written (%d unchanged suppressed) in %.0f ms via %s",
+            self.scope, decoded.entity_count, kept, sum(self._deduper.suppressed.values()) - self._rows_out,
+            (time.perf_counter() - started) * 1000, key_label,
+        )
+        self._rows_out = sum(self._deduper.suppressed.values())
 
     async def _log_fetch(
         self,

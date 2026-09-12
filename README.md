@@ -72,11 +72,20 @@ not always clean (BC Transit ships a duplicated `stop_id`, for example), so for
 keyed tables the first row per key wins and the duplicates are counted in a
 warning rather than failing the load.
 
-**Deduplication.** Realtime rows use the entity's own timestamp when the feed
-provides one (falling back to the header timestamp), with a unique index that
-includes it. Re-polling an unchanged vehicle or trip is then a no-op rather than a
-duplicate row. Service alerts are slowly changing, so they are stored as state:
-one row per distinct alert content with `first_seen` / `last_seen`.
+**Deduplication.** Agencies republish their whole snapshot on every poll, and
+80-90 % of trip/stop-time rows repeat the previous poll byte for byte. Each
+poller therefore keeps a small in-memory `Deduper` (`dedupe.py`): per observed
+thing (vehicle, trip, or trip+stop; see `TableSpec.identity`) it remembers a
+hash of the last row written and when. A row identical to that one within the
+last hour (`RT_DEDUPE_SECONDS`) is dropped before it reaches the writer; a
+changed row, a new thing, or an unchanged one not written for an hour goes
+through. A stored row thus means "observed like this at `time`, unchanged since
+the previous row for the same thing", and the state at instant T is the latest
+row at or before T per thing. Rows also use the entity's own timestamp when the
+feed provides one, with a unique index that includes it, so a second copy of
+the same observation is a no-op at the database too. Service alerts are slowly
+changing, so they are stored as state: one row per distinct alert content with
+`first_seen` / `last_seen`.
 
 ## Layout
 
@@ -294,9 +303,13 @@ GROUP BY 1, 2, 3 ORDER BY 1, 2, 3;
 
 - Old static versions accumulate by design. To prune, delete the `gtfs_*` rows
   and the `feed_versions` row for versions that are not `is_current`.
-- Retention and compression policies are not set. Add
-  `add_retention_policy` / `add_compression_policy` in a follow-up migration once
-  you know how much history you want to keep.
+- `migrations/0003_compression_and_retention.sql` compresses `stop_time_updates`,
+  `trip_updates` and `vehicle_positions` (segment by `feed_id`, order by
+  `time DESC`) once a chunk is a day old, and drops them after 14 / 90 / 180
+  days respectively. `stop_time_updates` uses 6-hour chunks so at most ~30 h of
+  it is ever uncompressed. Check with
+  `SELECT * FROM timescaledb_information.jobs` and
+  `hypertable_compression_stats('stop_time_updates')`.
 - A feed whose fetch fails is logged in `rt_fetches` with the error text and kind,
   and backs off exponentially (capped at 10 minutes, or until a key is usable
   again) until it recovers.
@@ -306,5 +319,4 @@ GROUP BY 1, 2, 3 ORDER BY 1, 2, 3;
 ## Roadmap
 
 - Read API / dashboard on top of the hypertables.
-- Retention and compression policies.
 - GTFS `shapes.txt` and fare files.

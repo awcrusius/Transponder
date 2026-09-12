@@ -4,12 +4,23 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+# One entry of an identity: a column name, or a tuple of names of which the
+# first non-null value is used (the coalesce in the table's unique index).
+IdentityColumn = str | tuple[str, ...]
+
 
 @dataclass(frozen=True)
 class TableSpec:
     name: str
     columns: tuple[str, ...]
     on_conflict: str = "DO NOTHING"
+    # Columns that say *what* was observed. Rows with the same identity and the
+    # same remaining columns (other than `observed_at`) are re-observations of one
+    # thing and are deduplicated by `transponder.dedupe` before they are written.
+    # Empty means the table is never deduplicated.
+    identity: tuple[IdentityColumn, ...] = ()
+    # Columns that only say *when* it was observed; ignored when comparing rows.
+    observed_at: tuple[str, ...] = ()
 
     @property
     def insert_sql(self) -> str:
@@ -27,6 +38,8 @@ VEHICLE_POSITIONS = TableSpec(
         "current_stop_sequence", "stop_id", "current_status", "congestion_level",
         "occupancy_status", "occupancy_percentage", "feed_timestamp", "fetched_at",
     ),
+    identity=("feed_id", "vehicle_id"),
+    observed_at=("time", "feed_timestamp", "fetched_at"),
 )
 
 TRIP_UPDATES = TableSpec(
@@ -36,6 +49,8 @@ TRIP_UPDATES = TableSpec(
         "route_id", "direction_id", "schedule_relationship", "vehicle_id", "vehicle_label",
         "delay", "stop_time_update_count", "feed_timestamp", "fetched_at",
     ),
+    identity=("feed_id", ("trip_id", "entity_id"), "trip_start_date"),
+    observed_at=("time", "feed_timestamp", "fetched_at"),
 )
 
 STOP_TIME_UPDATES = TableSpec(
@@ -46,6 +61,8 @@ STOP_TIME_UPDATES = TableSpec(
         "departure_delay", "departure_time", "departure_uncertainty",
         "schedule_relationship", "fetched_at",
     ),
+    identity=("feed_id", ("trip_id", "entity_id"), "trip_start_date", "stop_sequence", "stop_id"),
+    observed_at=("time", "fetched_at"),
 )
 
 SERVICE_ALERTS = TableSpec(

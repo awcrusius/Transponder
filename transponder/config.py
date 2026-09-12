@@ -188,6 +188,9 @@ class Settings:
     writer_batch_rows: int = 5000
     writer_flush_seconds: float = 1.0
     writer_queue_size: int = 2000
+    # A realtime row identical to one written in the last this-many seconds is
+    # not written again (see transponder.dedupe). 0 disables.
+    rt_dedupe_seconds: float = 3600.0
     tmp_dir: Path | None = None
 
     @classmethod
@@ -207,5 +210,6 @@ class Settings:
             writer_batch_rows=_env_int("WRITER_BATCH_ROWS", 5000),
             writer_flush_seconds=_env_float("WRITER_FLUSH_SECONDS", 1.0),
             writer_queue_size=_env_int("WRITER_QUEUE_SIZE", 2000),
+            rt_dedupe_seconds=_env_float("RT_DEDUPE_SECONDS", 3600.0),
             tmp_dir=Path(tmp) if tmp else None,
         )

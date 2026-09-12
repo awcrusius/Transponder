@@ -46,12 +46,29 @@ FEED = FeedConfig(feed_id="alpha", agency="A", static_url="https://x.example/g.z
                   realtime={"vehicle_positions": "https://x.example/vp"})
 
 
-def make_poller(handler, keys=2, health=None, stale_after=600.0):
+def make_poller(handler, keys=2, health=None, stale_after=600.0, dedupe_window=0.0):
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     ring = KeyRing("alpha", [ApiKey(f"K{i}", ResolvedAuth(params={"apikey": f"k{i}"})) for i in range(1, keys + 1)])
     writer = FakeWriter()
-    poller = Poller(FEED, "vehicle_positions", "https://x.example/vp", ring, client, writer, health, stale_after)
+    poller = Poller(FEED, "vehicle_positions", "https://x.example/vp", ring, client, writer, health, stale_after,
+                    dedupe_window=dedupe_window)
     return poller, writer, ring
+
+
+async def test_unchanged_rows_are_not_resubmitted_within_dedupe_window():
+    ts = now_ts()
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(200, content=payload(ts + len(calls), n=3))
+
+    poller, writer, _ = make_poller(handler, dedupe_window=3600.0)
+    await poller.poll()
+    await poller.poll()
+    vp_batches = [b for b in writer.batches if b.table == "vehicle_positions"]
+    assert [len(b.rows) for b in vp_batches] == [3]
+    assert len(writer.fetch_rows()) == 2  # rt_fetches is never deduplicated
 
 
 async def test_success_logs_key_and_writes_rows():

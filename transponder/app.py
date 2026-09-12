@@ -81,7 +81,10 @@ def build_jobs(
         keyring = keyrings[feed.feed_id]
         for kind, endpoint in feed.realtime.endpoints():
             interval = feed.rt_interval(endpoint)
-            poller = Poller(feed, kind, endpoint.url, keyring, client, writer, health, config.stale_after(feed))
+            poller = Poller(
+                feed, kind, endpoint.url, keyring, client, writer, health, config.stale_after(feed),
+                dedupe_window=settings.rt_dedupe_seconds,
+            )
             tasks.append(asyncio.create_task(
                 run_periodic(poller.scope, interval, poller.poll, health=health, initial_delay=stagger(interval)),
                 name=poller.scope,
