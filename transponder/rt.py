@@ -1,4 +1,16 @@
-"""GTFS-Realtime: fetch with key rotation, decode with gtfs-realtime-bindings, detect stale feeds."""
+"""GTFS-Realtime: fetch with key rotation, decode with gtfs-realtime-bindings, detect stale feeds.
+
+Each Poller owns one (feed, endpoint) pair. A poll fetches the protobuf, decodes
+it in a worker thread into flat row tuples in the column order declared in
+`tables.py`, drops rows that merely repeat what was last written (see
+`dedupe.py`), hands the rest to the Writer, and records the attempt in
+rt_fetches.
+
+Row timestamps: `time` is the entity's own timestamp when the feed provides one
+(vehicle.timestamp, trip_update.timestamp), otherwise the FeedMessage header
+timestamp, otherwise the fetch time. `feed_timestamp` and `fetched_at` are
+stored alongside so the three can always be told apart in queries.
+"""
 
 from __future__ import annotations
 

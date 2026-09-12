@@ -19,7 +19,14 @@
 #        with a concrete suggested poll interval.
 #   exhausted_cooldown_seconds: how long a quota-blocked key sits out (default 3600).
 #
+# rt_poll_interval_seconds: default interval for this feed's realtime endpoints
+#        (each endpoint may override it with poll_interval_seconds).
+# static_check_interval_hours: how often to look for a new static bundle. A
+#        check is also made at every start.
 # stale_after_seconds (per feed, optional): override alerting.stale_after_seconds.
+#
+# The feeds below are real, publicly documented feeds used as worked examples.
+# Replace them with your own agencies; only TransLink needs a key.
 
 feeds:
   - feed_id: translink

@@ -96,12 +96,18 @@ class RealtimeConfig(BaseModel):
 
 
 class FeedConfig(BaseModel):
+    # Short slug that labels every row this feed writes. Choose once; changing
+    # it later splits the feed's history in two.
     feed_id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]*$", max_length=64)
     agency: str = Field(min_length=1)
     static_url: str
+    # Any subset of vehicle_positions / trip_updates / service_alerts.
     realtime: RealtimeConfig = Field(default_factory=RealtimeConfig)
+    # Applied to the realtime endpoints and to the static download alike.
     auth: AuthConfig = Field(default_factory=AuthConfig)
+    # Default interval for realtime endpoints that do not set their own.
     rt_poll_interval_seconds: float = Field(default=30, ge=1)
+    # Static bundle change check; one is also made at every start.
     static_check_interval_hours: float = Field(default=24, gt=0)
     # Override alerting.stale_after_seconds for this feed.
     stale_after_seconds: float | None = Field(default=None, ge=30)

@@ -244,6 +244,11 @@ async def check_for_update(
 
     Returns a StaticLoad pointing at a temp file when the feed changed. The caller owns
     the temp file from then on. Uses the feed's key ring like the realtime pollers.
+
+    "Changed" means the zip bytes changed. Servers that build the zip on request
+    produce a new hash every time (zip headers carry timestamps) even when the
+    timetable is identical, so such feeds yield one new version per check; the
+    README's storage section shows how to prune superseded versions.
     """
     current = await pool.fetchrow(
         "SELECT sha256, etag, last_modified FROM feed_versions WHERE feed_id = $1 AND is_current",

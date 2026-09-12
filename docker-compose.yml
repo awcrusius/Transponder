@@ -1,12 +1,16 @@
+# Local / single-host deployment: TimescaleDB plus the ingestion service.
+# Secrets and tuning come from .env (see .env.example); feeds from feeds.yaml.
 services:
   timescaledb:
     image: timescale/timescaledb:latest-pg16
     environment:
+      # Default credentials for local use. Change them (and DATABASE_URL below)
+      # or drop the `ports` mapping before exposing this host to a network.
       POSTGRES_USER: transponder
       POSTGRES_PASSWORD: transponder
       POSTGRES_DB: transponder
     ports:
-      - "5432:5432"
+      - "5432:5432"        # so psql / notebooks on the host can query the archive
     volumes:
       - tsdb-data:/var/lib/postgresql/data
     healthcheck:
@@ -21,13 +25,14 @@ services:
       - path: .env
         required: false
     environment:
+      # Overrides any DATABASE_URL in .env: inside Compose the DB is reachable by service name.
       DATABASE_URL: postgresql://transponder:transponder@timescaledb:5432/transponder
     volumes:
-      - ./feeds.yaml:/app/feeds.yaml:ro
+      - ./feeds.yaml:/app/feeds.yaml:ro   # edit feeds without rebuilding; restart to apply
     depends_on:
       timescaledb:
         condition: service_healthy
     restart: unless-stopped
 
 volumes:
-  tsdb-data:
+  tsdb-data:   # the only state; back this up (or use pg_dump)
